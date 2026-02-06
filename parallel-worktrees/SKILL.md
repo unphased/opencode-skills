@@ -1,25 +1,29 @@
 ---
 name: parallel-worktrees
-description: Spawn an independent opencode instance in a git worktree. User says "spawn a head for X" → agent creates branch, worktree, tmux pane with opencode, sends prompt, returns to current conversation.
+description: Manage parallel work across git worktrees. Two modes - "spawn a head" (create tmux+opencode) or "init parallel head" (user already in new instance, just set up worktree).
 license: MIT
 compatibility: opencode
 metadata:
   category: orchestration
-  triggers: spawn a head, parallel head, spin up, worktree, dual head, side quest
+  triggers: spawn a head, parallel head, spin up, worktree, dual head, side quest, init parallel head, init me
 ---
 
 # Parallel Worktrees
 
-Spawn an independent opencode peer in a git worktree, then resume current work.
+Two workflows for parallel development using git worktrees.
 
-## Trigger Phrases
+---
 
-User says any of:
+## Mode 1: Spawn a Head (from existing session)
+
+**Use when**: You're deep in a session and want to spin off parallel work without interrupting.
+
+### Trigger Phrases
 
 - "spawn a head for X"
 - "spin up a parallel head to do X"
 - "dual head this - you keep planning, spawn execution for X"
-- "side quest: X" (implies spawn)
+- "side quest: X"
 
 ## What You Do
 
@@ -90,9 +94,73 @@ git worktree remove ../project-auth-refactor
 git branch -d feature/auth-refactor
 ```
 
+---
+
+## Mode 2: Init Parallel Head (you're the new instance)
+
+**Use when**: User manually created a tmux pane, started opencode, and wants YOU to set up the worktree.
+
+### Trigger Phrases
+
+- "init me a new parallel head here"
+- "init parallel head for X"
+- "set up this instance as a parallel head"
+- "I'm a new head, set me up for X"
+
+### What You Do
+
+1. **Confirm current directory** (should be in the main repo, not a worktree yet)
+2. **Create branch** from main (or user-specified base)
+3. **Create worktree** in sibling directory
+4. **Change to worktree** by telling user to `cd` (or note you're ready)
+5. **Acknowledge** and await instructions
+
+### Execution
+
+```python
+# 1. Determine names from user request
+feature = "auth-refactor"
+branch = f"feature/{feature}"
+project_name = os.path.basename(os.getcwd())  # e.g., "myproject"
+worktree_dir = f"../{project_name}-{feature}"
+
+# 2. Check we're in main repo, not already a worktree
+result = bash("git rev-parse --show-toplevel")
+# Verify this is the main repo
+
+# 3. Create branch and worktree
+bash(f"git branch {branch} main")
+bash(f"git worktree add {worktree_dir} {branch}")
+
+# 4. Report to user
+print(f"""
+Parallel head initialized:
+- Branch: {branch}
+- Worktree: {worktree_dir}
+
+To work there, either:
+  cd {worktree_dir}
+
+Or restart opencode in that directory.
+
+I'm ready for your task once you're in the worktree.
+""")
+```
+
+### After Init
+
+User will either:
+
+- Restart opencode in the worktree directory, OR
+- Stay in current session and you work via absolute paths (less ideal)
+
+Best practice: User restarts opencode in the worktree, then gives the actual task.
+
+---
+
 ## Key Points
 
-- Spawned instance is a **peer**, not a subagent (no IPC, no result return)
+- Both modes create **peer instances**, not subagents (no IPC, no result return)
 - Results come back via **git merge**, not tool output
-- Keep prompts detailed since spawned instance starts fresh
-- Resume your current work immediately after spawning
+- Mode 1: Agent spawns the new instance
+- Mode 2: User spawns the instance, agent sets up the worktree
