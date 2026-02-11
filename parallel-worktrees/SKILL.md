@@ -12,6 +12,38 @@ metadata:
 
 Two workflows for parallel development using git worktrees.
 
+## OpenCode State Isolation (Critical)
+
+If you run multiple OpenCode instances concurrently against the same repo history (including separate git worktrees and even separate clones), they can collide on persisted OpenCode state unless you isolate the XDG directories per head.
+
+Rule of thumb: one parallel head = one worktree + one OpenCode "profile" (unique `XDG_*` dirs).
+
+Recommended env wrapper (per head):
+
+```bash
+# pick a stable name per head, e.g. "myrepo-auth-refactor"
+OC_PROFILE="myrepo-auth-refactor"
+OCROOT="$HOME/.local/share/opencode-heads/$OC_PROFILE"
+
+XDG_DATA_HOME="$OCROOT/data" \
+XDG_CACHE_HOME="$OCROOT/cache" \
+XDG_STATE_HOME="$OCROOT/state" \
+  opencode
+```
+
+Notes:
+
+- Prefer `XDG_*` overrides over relying on default locations.
+- Isolating `XDG_CONFIG_HOME` can hide your normal OpenCode config/plugins; only isolate config if you know you want a fully clean profile.
+- Avoid running multiple heads with `--continue` unless you explicitly want them to resume the same recent session.
+
+## Prefer Scripts
+
+This repo includes two scripts that implement the workflows safely:
+
+- `scripts/oc-bifurcate`: run inside tmux to split a pane and start a parallel head
+- `scripts/oc-head`: create a worktree head and start OpenCode (tmux optional)
+
 ---
 
 ## Mode 1: Spawn a Head (from existing session)
@@ -35,28 +67,10 @@ Two workflows for parallel development using git worktrees.
 
 ## Execution
 
-```python
-# 1. Determine names
-feature = "auth-refactor"  # derived from user request
-branch = f"feature/{feature}"
-worktree_dir = f"../{project_name}-{feature}"  # sibling to current dir
+From the active tmux pane:
 
-# 2. Create branch and worktree
-bash(f"git branch {branch} main")  # or origin/main
-bash(f"git worktree add {worktree_dir} {branch}")
-
-# 3. Spawn tmux pane with opencode
-interactive_bash(tmux_command=f'split-window -h -c "{absolute_worktree_path}"')
-interactive_bash(tmux_command='send-keys "opencode" Enter')
-
-# 4. Wait for opencode to initialize, then send prompt
-# (2-3 second delay, or use send-keys with the prompt after opencode starts)
-import time; time.sleep(3)
-prompt = "ulw Implement auth refactor. Context: ... Requirements: ..."
-interactive_bash(tmux_command=f"send-keys '{prompt}' Enter")
-
-# 5. Report and resume
-# "Spawned parallel head on feature/auth-refactor in tmux pane. Continuing..."
+```bash
+scripts/oc-bifurcate --feature auth-refactor --prompt "ulw Implement auth refactor. Context: ... Requirements: ..."
 ```
 
 ## Prompt for the Spawned Instance
@@ -112,39 +126,22 @@ git branch -d feature/auth-refactor
 1. **Confirm current directory** (should be in the main repo, not a worktree yet)
 2. **Create branch** from main (or user-specified base)
 3. **Create worktree** in sibling directory
-4. **Change to worktree** by telling user to `cd` (or note you're ready)
-5. **Acknowledge** and await instructions
+4. **Restart with isolated XDG dirs** in the new worktree (best), or accept collision risk
+5. **Change to worktree** by telling user to `cd` (or note you're ready)
+6. **Acknowledge** and await instructions
 
 ### Execution
 
-```python
-# 1. Determine names from user request
-feature = "auth-refactor"
-branch = f"feature/{feature}"
-project_name = os.path.basename(os.getcwd())  # e.g., "myproject"
-worktree_dir = f"../{project_name}-{feature}"
+Create the worktree head and start OpenCode:
 
-# 2. Check we're in main repo, not already a worktree
-result = bash("git rev-parse --show-toplevel")
-# Verify this is the main repo
+```bash
+scripts/oc-head --feature auth-refactor
+```
 
-# 3. Create branch and worktree
-bash(f"git branch {branch} main")
-bash(f"git worktree add {worktree_dir} {branch}")
+If you want to run in the current terminal (no tmux):
 
-# 4. Report to user
-print(f"""
-Parallel head initialized:
-- Branch: {branch}
-- Worktree: {worktree_dir}
-
-To work there, either:
-  cd {worktree_dir}
-
-Or restart opencode in that directory.
-
-I'm ready for your task once you're in the worktree.
-""")
+```bash
+scripts/oc-head --feature auth-refactor --no-tmux
 ```
 
 ### After Init
@@ -164,3 +161,8 @@ Best practice: User restarts opencode in the worktree, then gives the actual tas
 - Results come back via **git merge**, not tool output
 - Mode 1: Agent spawns the new instance
 - Mode 2: User spawns the instance, agent sets up the worktree
+
+## Default Safety Policy
+
+- If you spawn a head, always isolate OpenCode state with per-head `XDG_*` dirs.
+- If the user refuses isolation, warn: snapshot/diff/undo views can be misleading in parallel heads.
