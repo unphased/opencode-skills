@@ -1,6 +1,6 @@
 ---
 name: research-tools
-description: External research via Context7 (docs), Grep.app (code examples), and Exa (web search). Loads MCPs on-demand via skill_mcp.
+description: Load on-demand MCP research tools with exact `skill_mcp` signatures: Context7 docs, grep_app GitHub search, and Exa web search.
 license: MIT
 compatibility: opencode
 metadata:
@@ -10,90 +10,144 @@ metadata:
 
 # Research Tools
 
-## Syntax
+Use this skill when you need one of these exact MCPs:
 
-```
-skill_mcp(mcp_name="<SERVER>", tool_name="<TOOL>", arguments='<JSON>')
-```
+- `context7`
+- `grep_app`
+- `websearch`
 
-- `mcp_name`: `context7` | `grep_app` | `websearch` (NOT `"research-tools"`)
-- `tool_name`: Tool name only (NO server prefix)
+## Exact Call Shape
 
-## Tools
-
-| Server      | Tool                 | Purpose                     |
-| ----------- | -------------------- | --------------------------- |
-| `context7`  | `resolve-library-id` | Get library ID (first step) |
-| `context7`  | `query-docs`         | Query library docs          |
-| `grep_app`  | `searchGitHub`       | GitHub code pattern search  |
-| `websearch` | `web_search_exa`     | Web search                  |
-
-## Examples
-
-**Context7** (2-step):
+Always call them like this:
 
 ```js
-skill_mcp(mcp_name="context7", tool_name="resolve-library-id", arguments='{"libraryName": "react"}')
-skill_mcp(mcp_name="context7", tool_name="query-docs", arguments='{"libraryId": "/facebook/react", "query": "useEffect"}')
+skill_mcp(mcp_name="<server>", tool_name="<tool>", arguments='<json>')
 ```
 
-**Grep.app**:
+Rules:
+- `mcp_name` must be exactly one of: `context7`, `grep_app`, `websearch`
+- `tool_name` is just the tool name, not a prefixed OpenCode tool id
+- `arguments` is a JSON string
+
+Do not use:
+- `mcp_name="research-tools"`
+- `tool_name="context7_resolve-library-id"`
+- `tool_name="grep_app_searchGitHub"`
+- `tool_name="websearch_web_search_exa"`
+
+## Actual Tools To Use
+
+### `context7`
+
+First call:
 
 ```js
-skill_mcp(mcp_name="grep_app", tool_name="searchGitHub", arguments='{"query": "useActionState(", "language": ["TypeScript", "TSX"]}')
+skill_mcp(
+  mcp_name="context7",
+  tool_name="resolve-library-id",
+  arguments='{"libraryName":"react"}'
+)
 ```
 
-**Exa**:
+Then call:
 
 ```js
-skill_mcp(mcp_name="websearch", tool_name="web_search_exa", arguments='{"query": "Next.js 15 features", "numResults": 5}')
+skill_mcp(
+  mcp_name="context7",
+  tool_name="query-docs",
+  arguments='{"libraryId":"/facebook/react","query":"useEffect"}'
+)
 ```
 
-## Common Mistakes
+Use `context7` for:
+- official docs
+- API lookup
+- versioned library behavior
 
-| Wrong                              | Correct                          |
-| ---------------------------------- | -------------------------------- |
-| `mcp_name="research-tools"`        | `mcp_name="context7"`            |
-| `tool_name="context7_resolve-..."` | `tool_name="resolve-library-id"` |
-| `tool_name="grep_app_..."`         | `tool_name="searchGitHub"`       |
+### `grep_app`
 
-## Tool Selection
+Use this exact tool:
 
-| Goal                      | Primary     | Secondary  |
-| ------------------------- | ----------- | ---------- |
-| GitHub issues/discussions | `websearch` | `grep_app` |
-| Official docs             | `context7`  | -          |
-| Code patterns             | `grep_app`  | -          |
-| Current events            | `websearch` | `context7` |
-| Library comparison        | `websearch` | `context7` |
+```js
+skill_mcp(
+  mcp_name="grep_app",
+  tool_name="searchGitHub",
+  arguments='{"query":"useActionState(","language":["TypeScript","TSX"]}'
+)
+```
 
-Note: For GitHub, prefer MCP tools over `gh` CLI unless auth needed.
+Use `grep_app` for:
+- GitHub code patterns
+- finding real implementations
+- repository-level or language-filtered searches
 
-## Efficiency Tips
+Search literal code, not vague keywords.
+Good: `"JoinSet<"`, `"useActionState("`, `"staleTime:"`
+Bad: `"react query example"`
 
-1. **Parallel calls**: Fire independent searches in same message
-2. **grep_app**: Search literal code (`"JoinSet<"`), not keywords
-3. **context7**: Resolve ID first, skip if cached
-4. **Stop when**: same info repeats, 2+ searches yield nothing, or direct answer found
+### `websearch`
 
-## Output Requirements
+Use this exact tool:
 
-- Direct URLs for sources
-- Real code snippets (not synthetic)
-- Filter for relevance only
-- Note dates/versions for current state
+```js
+skill_mcp(
+  mcp_name="websearch",
+  tool_name="web_search_exa",
+  arguments='{"query":"Next.js 15 features","numResults":5}'
+)
+```
 
-## Verification (IMPORTANT)
+Use `websearch` for:
+- current events
+- recent releases
+- blog posts, issues, discussions
+- finding docs URLs when you do not already know the library id
 
-After this skill loads, you should see an `## Available MCP Servers` section below with:
+## Fast Tool Selection
 
-- `### context7`, `### grep_app`, `### websearch` headers
-- `**Tools:**` with `inputSchema` JSON blocks for each
+- Official docs: `context7`
+- Real GitHub code examples: `grep_app`
+- Current information or web search: `websearch`
+- GitHub issues/discussions: start with `websearch`, then `grep_app` if needed
 
-**If missing or shows `*No capabilities discovered*`:**
+## Recommended Patterns
 
-1. MCP connection failed - retry once with `skill(name="research-tools")`
-2. If still missing, warn user: "MCP servers unreachable - research tools unavailable"
-3. Fall back to `webfetch` for basic web lookups
+### Docs lookup
 
-**If schemas are present:** Prefer the discovered `inputSchema` over examples in this doc (schemas are authoritative).
+```js
+skill_mcp(mcp_name="context7", tool_name="resolve-library-id", arguments='{"libraryName":"tanstack query"}')
+skill_mcp(mcp_name="context7", tool_name="query-docs", arguments='{"libraryId":"/tanstack/query","query":"staleTime gcTime"}')
+```
+
+### GitHub code search
+
+```js
+skill_mcp(mcp_name="grep_app", tool_name="searchGitHub", arguments='{"query":"queryOptions(","language":["TypeScript"]}')
+```
+
+### Current/recent info
+
+```js
+skill_mcp(mcp_name="websearch", tool_name="web_search_exa", arguments='{"query":"Vite 2026 release notes","numResults":5}')
+```
+
+## Efficiency Rules
+
+1. Fire independent searches in parallel when they do not depend on each other.
+2. For `context7`, resolve the library id once, then query docs.
+3. For `grep_app`, prefer exact syntax fragments over topic words.
+4. Stop once two searches are clearly repeating the same information.
+
+## Verification
+
+After loading the skill, check the discovered MCP section:
+- `context7`
+- `grep_app`
+- `websearch`
+
+If capability discovery is missing or empty:
+1. Retry `skill(name="research-tools")` once.
+2. If still missing, tell the user the MCP servers are unavailable.
+3. Fall back to ordinary web lookup tools if needed.
+
+If the discovered schemas disagree with this file, trust the discovered schemas.
