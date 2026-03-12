@@ -71,8 +71,8 @@ Use this exact tool:
 ```js
 skill_mcp(
   mcp_name="grep_app",
-  tool_name="searchGitHub",
-  arguments='{"query":"useActionState(","language":["TypeScript","TSX"]}'
+  tool_name="searchCode",
+  arguments='{"query":"useActionState(","langFilter":"TypeScript,TSX","numberedOutput":true}'
 )
 ```
 
@@ -80,6 +80,11 @@ Use `grep_app` for:
 - GitHub code patterns
 - finding real implementations
 - repository-level or language-filtered searches
+
+Other `grep_app` tools that may be useful later:
+- `github_file`
+- `github_batch_files`
+- `batch_retrieve_files`
 
 Search literal code, not vague keywords.
 Good: `"JoinSet<"`, `"useActionState("`, `"staleTime:"`
@@ -122,7 +127,7 @@ skill_mcp(mcp_name="context7", tool_name="query-docs", arguments='{"libraryId":"
 ### GitHub code search
 
 ```js
-skill_mcp(mcp_name="grep_app", tool_name="searchGitHub", arguments='{"query":"queryOptions(","language":["TypeScript"]}')
+skill_mcp(mcp_name="grep_app", tool_name="searchCode", arguments='{"query":"queryOptions(","langFilter":"TypeScript","numberedOutput":true}')
 ```
 
 ### Current/recent info
